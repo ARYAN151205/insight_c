@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini C Compiler</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:#ffffff; --bg2:#f5f5f3; --bg3:#efefec;
+    --border:rgba(0,0,0,0.12); --border2:rgba(0,0,0,0.22);
+    --text:#1a1a18; --text2:#5a5a56; --text3:#9a9994;
+    --blue:#185fa5; --blue-bg:#e6f1fb; --blue-bd:#85b7eb;
+    --green:#0f6e56; --green-bg:#e1f5ee; --green-bd:#5dcaa5;
+    --amber:#854f0b; --amber-bg:#faeeda; --amber-bd:#ef9f27;
+    --coral:#993c1d; --coral-bg:#faece7; --coral-bd:#f0997b;
+    --purple:#3c3489; --purple-bg:#eeedfe; --purple-bd:#afa9ec;
+    --gray:#444441; --gray-bg:#f1efe8; --gray-bd:#b4b2a9;
+    --red:#a32d2d; --red-bg:#fcebeb; --red-bd:#f09595;
+    --success-bg:#e1f5ee; --success:#0f6e56;
+    --font-mono:'Cascadia Code','Fira Code','Consolas',monospace;
+    --font-sans:system-ui,-apple-system,sans-serif;
+    --radius:8px; --radius-lg:12px;
+  }
+  @media (prefers-color-scheme:dark) {
+    :root {
+      --bg:#1c1c1a; --bg2:#252523; --bg3:#2e2e2b;
+      --border:rgba(255,255,255,0.1); --border2:rgba(255,255,255,0.2);
+      --text:#e8e6de; --text2:#a8a69e; --text3:#6a6860;
+      --blue:#85b7eb; --blue-bg:#042c53; --blue-bd:#185fa5;
+      --green:#9fe1cb; --green-bg:#04342c; --green-bd:#1d9e75;
+      --amber:#fac775; --amber-bg:#412402; --amber-bd:#ba7517;
+      --coral:#f5c4b3; --coral-bg:#4a1b0c; --coral-bd:#993c1d;
+      --purple:#cecbf6; --purple-bg:#26215c; --purple-bd:#534ab7;
+      --gray:#d3d1c7; --gray-bg:#2c2c2a; --gray-bd:#5f5e5a;
+      --red:#f7c1c1; --red-bg:#501313; --red-bd:#a32d2d;
+      --success-bg:#04342c; --success:#9fe1cb;
+    }
+  }
+
+  body { background:var(--bg3); color:var(--text); font-family:var(--font-sans); min-height:100vh; padding:0 0 48px; }
+
+  header {
+    background:var(--bg); border-bottom:0.5px solid var(--border2);
+    padding:14px 28px; display:flex; align-items:center; gap:14px;
+    position:sticky; top:0; z-index:100;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon {
+    width:32px; height:32px; background:var(--blue-bg);
+    border:0.5px solid var(--blue-bd); border-radius:var(--radius);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-mono); font-size:15px; font-weight:700; color:var(--blue);
+  }
+  .logo-text { font-size:16px; font-weight:600; }
+  .logo-sub  { font-size:12px; color:var(--text3); }
+  .header-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  select {
+    font-family:var(--font-sans); font-size:13px; padding:6px 10px;
+    border:0.5px solid var(--border2); border-radius:var(--radius);
+    background:var(--bg2); color:var(--text); cursor:pointer; outline:none;
+  }
+  .btn {
+    font-family:var(--font-sans); font-size:13px; font-weight:500;
+    padding:6px 16px; border-radius:var(--radius);
+    border:0.5px solid var(--blue-bd); background:var(--blue-bg);
+    color:var(--blue); cursor:pointer; transition:opacity .15s;
+  }
+  .btn:hover { opacity:.8; }
+  .btn-run { background:var(--blue); color:#fff; border-color:var(--blue); padding:6px 20px; }
+
+  .pipeline {
+    display:flex; align-items:center; padding:10px 28px;
+    background:var(--bg); border-bottom:0.5px solid var(--border);
+    overflow-x:auto; gap:0; flex-wrap:nowrap;
+  }
+  .pip-step {
+    padding:4px 12px; border-radius:20px; font-size:11px; font-weight:500;
+    background:var(--bg2); border:0.5px solid var(--border2); color:var(--text2);
+    white-space:nowrap; transition:background .2s,color .2s;
+  }
+  .pip-step.lit { background:var(--blue-bg); border-color:var(--blue-bd); color:var(--blue); }
+  .pip-step.err { background:var(--red-bg);  border-color:var(--red-bd);  color:var(--red); }
+  .pip-arrow { color:var(--text3); font-size:14px; padding:0 3px; flex-shrink:0; }
+
+  .main {
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+    padding:18px 28px; max-width:1600px; margin:0 auto;
+  }
+  @media (max-width:900px) { .main { grid-template-columns:1fr; } }
+
+  .panel { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
+  .panel-hdr {
+    display:flex; align-items:center; gap:10px; padding:9px 14px;
+    background:var(--bg2); border-bottom:0.5px solid var(--border);
+    font-size:13px; font-weight:500;
+  }
+  .panel-hdr .dot { width:8px; height:8px; border-radius:50%; background:var(--border2); flex-shrink:0; }
+  .panel-hdr .sub { font-size:11px; color:var(--text3); font-weight:400; }
+
+  #src-editor {
+    width:100%; min-height:200px; font-family:var(--font-mono);
+    font-size:13px; line-height:1.7; padding:14px 16px;
+    border:none; outline:none; resize:vertical; background:var(--bg); color:var(--text);
+  }
+
+  .phases-col { display:flex; flex-direction:column; gap:10px; }
+
+  .phase-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
+  .phase-card.active  { border-color:var(--blue-bd); }
+  .phase-card.errored { border-color:var(--red-bd); }
+
+  .phase-hdr {
+    display:flex; align-items:center; gap:10px; padding:9px 14px;
+    background:var(--bg2); cursor:pointer; user-select:none;
+    border-bottom:0.5px solid transparent; transition:background .15s;
+  }
+  .phase-hdr:hover { background:var(--bg3); }
+  .phase-card.open .phase-hdr { border-bottom-color:var(--border); }
+
+  .ph-num {
+    width:20px; height:20px; border-radius:50%; flex-shrink:0;
+    background:var(--bg3); border:0.5px solid var(--border2);
+    font-size:10px; font-weight:600; color:var(--text2);
+    display:flex; align-items:center; justify-content:center; transition:background .2s,color .2s;
+  }
+  .phase-card.active  .ph-num { background:var(--blue-bg); border-color:var(--blue-bd); color:var(--blue); }
+  .phase-card.errored .ph-num { background:var(--red-bg);  border-color:var(--red-bd);  color:var(--red); }
+
+  .ph-name { font-size:13px; font-weight:500; flex:1; }
+  .ph-desc { font-size:11px; color:var(--text3); }
+  .ph-chevron { font-size:10px; color:var(--text3); transition:transform .2s; }
+  .phase-card.open .ph-chevron { transform:rotate(90deg); }
+
+  .phase-body { display:none; padding:12px 14px; overflow-x:auto; }
+  .phase-card.open .phase-body { display:block; }
+
+  .token-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .tok { display:inline-flex; flex-direction:column; align-items:center; padding:4px 8px; border-radius:6px; border:0.5px solid; gap:1px; }
+  .tok-val  { font-family:var(--font-mono); font-size:12px; font-weight:600; }
+  .tok-type { font-size:9px; letter-spacing:.05em; text-transform:uppercase; opacity:.8; }
+
+  .tok-KEYWORD  { background:var(--purple-bg); border-color:var(--purple-bd); color:var(--purple); }
+  .tok-IDENT    { background:var(--green-bg);  border-color:var(--green-bd);  color:var(--green);  }
+  .tok-NUMBER   { background:var(--amber-bg);  border-color:var(--amber-bd);  color:var(--amber);  }
+  .tok-OPERATOR { background:var(--coral-bg);  border-color:var(--coral-bd);  color:var(--coral);  }
+  .tok-PUNCT    { background:var(--gray-bg);   border-color:var(--gray-bd);   color:var(--gray);   }
+  .tok-STRING   { background:var(--blue-bg);   border-color:var(--blue-bd);   color:var(--blue);   }
+  .tok-UNKNOWN  { background:var(--red-bg);    border-color:var(--red-bd);    color:var(--red);    }
+
+  .tree-wrap { overflow-x:auto; }
+  .tree-svg  { display:block; }
+
+  .sym-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .sym-table th { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); font-weight:500; text-align:left; padding:4px 8px; border-bottom:0.5px solid var(--border2); }
+  .sym-table td { padding:4px 8px; border-bottom:0.5px solid var(--border); font-family:var(--font-mono); }
+
+  .ir-table { width:100%; border-collapse:collapse; font-size:12px; font-family:var(--font-mono); }
+  .ir-table td { padding:3px 8px; border-bottom:0.5px solid var(--border); }
+  .ir-table td:first-child { color:var(--text3); width:28px; text-align:right; padding-right:10px; }
+  .ir-table td:nth-child(2){ color:var(--blue); font-weight:600; min-width:70px; }
+
+  .asm-block { font-family:var(--font-mono); font-size:12px; line-height:1.8; white-space:pre; }
+  .asm-lbl { color:var(--blue); font-weight:600; }
+  .asm-op  { color:var(--green); }
+  .asm-cmt { color:var(--text3); }
+
+  .alert-ok  { background:var(--success-bg); color:var(--success); border-radius:var(--radius); padding:8px 12px; font-size:13px; margin-top:8px; }
+  .alert-err { background:var(--red-bg);     color:var(--red);     border-radius:var(--radius); padding:8px 12px; font-size:13px; margin-top:8px; }
+  .alert-warn{ background:var(--amber-bg);   color:var(--amber);   border-radius:var(--radius); padding:8px 12px; font-size:13px; margin-top:8px; }
+
+  .exec-out { font-family:var(--font-mono); font-size:13px; background:var(--bg2); border-radius:var(--radius); padding:10px 14px; margin-bottom:8px; border:0.5px solid var(--border); white-space:pre-wrap; }
+  .exec-lbl { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px; padding:10px 14px; }
+  .leg-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); }
+  .leg-dot  { width:10px; height:10px; border-radius:3px; border:0.5px solid; }
+
+  footer { text-align:center; color:var(--text3); font-size:12px; margin-top:28px; }
+  .hint  { font-size:11px; color:var(--text3); margin-top:8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">C</div>
+    <span class="logo-text">Mini C Compiler</span>
+    <span class="logo-sub">&nbsp;— 6 Phases Visualised</span>
+  </div>
+  <div class="header-right">
+    <select id="sample-select" onchange="loadSample(this.value)">
+      <option value="basic">Simple arithmetic</option>
+      <option value="if">If statement</option>
+      <option value="loop">While loop</option>
+      <option value="func">Function call</option>
+      <option value="nested">Nested expressions</option>
+    </select>
+    <button class="btn btn-run" onclick="compile()">&#9654; Compile &amp; Run</button>
+    <button class="btn" onclick="clearAll()">Clear</button>
+  </div>
+</header>
+
+<div class="pipeline">
+  <div class="pip-step" id="pip-1">1. Lexer</div><span class="pip-arrow">&#8594;</span>
+  <div class="pip-step" id="pip-2">2. Parser</div><span class="pip-arrow">&#8594;</span>
+  <div class="pip-step" id="pip-3">3. Semantic</div><span class="pip-arrow">&#8594;</span>
+  <div class="pip-step" id="pip-4">4. IR Gen</div><span class="pip-arrow">&#8594;</span>
+  <div class="pip-step" id="pip-5">5. Code Gen</div><span class="pip-arrow">&#8594;</span>
+  <div class="pip-step" id="pip-6">6. Execute</div>
+</div>
+
+<div class="main">
+
+  <!-- Left column -->
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="dot" style="background:var(--amber-bd)"></div>
+        <span style="flex:1">Source Code Editor</span>
+        <span class="sub">Write your C code below</span>
+      </div>
+      <textarea id="src-editor" spellcheck="false" rows="14">int main() {
+    int x = 5 + 3;
+    int y = x * 2;
+    return y;
+}</textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="dot" style="background:var(--purple-bd)"></div>
+        <span>Token colour legend</span>
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--purple-bg);border-color:var(--purple-bd)"></div>Keyword</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--green-bg);border-color:var(--green-bd)"></div>Identifier</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div>Number</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--coral-bg);border-color:var(--coral-bd)"></div>Operator</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--gray-bg);border-color:var(--gray-bd)"></div>Punctuation</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--blue-bg);border-color:var(--blue-bd)"></div>String</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red-bg);border-color:var(--red-bd)"></div>Unknown</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column: phase cards -->
+  <div class="phases-col">
+
+    <div class="phase-card" id="ph-1">
+      <div class="phase-hdr" onclick="toggle('ph-1')">
+        <div class="ph-num">1</div>
+        <span class="ph-name">Lexical Analysis</span>
+        <span class="ph-desc">Source &rarr; Token stream</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-1"><span style="color:var(--text3)">Click Compile &amp; Run to start</span></div></div>
+    </div>
+
+    <div class="phase-card" id="ph-2">
+      <div class="phase-hdr" onclick="toggle('ph-2')">
+        <div class="ph-num">2</div>
+        <span class="ph-name">Syntax Analysis (Parser)</span>
+        <span class="ph-desc">Tokens &rarr; Abstract Syntax Tree</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-2"></div></div>
+    </div>
+
+    <div class="phase-card" id="ph-3">
+      <div class="phase-hdr" onclick="toggle('ph-3')">
+        <div class="ph-num">3</div>
+        <span class="ph-name">Semantic Analysis</span>
+        <span class="ph-desc">Type checking &middot; Symbol table</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-3"></div></div>
+    </div>
+
+    <div class="phase-card" id="ph-4">
+      <div class="phase-hdr" onclick="toggle('ph-4')">
+        <div class="ph-num">4</div>
+        <span class="ph-name">Intermediate Representation</span>
+        <span class="ph-desc">Three-address code (TAC)</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-4"></div></div>
+    </div>
+
+    <div class="phase-card" id="ph-5">
+      <div class="phase-hdr" onclick="toggle('ph-5')">
+        <div class="ph-num">5</div>
+        <span class="ph-name">Code Generation</span>
+        <span class="ph-desc">x86-like assembly output</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-5"></div></div>
+    </div>
+
+    <div class="phase-card" id="ph-6">
+      <div class="phase-hdr" onclick="toggle('ph-6')">
+        <div class="ph-num">6</div>
+        <span class="ph-name">Execution (Simulated)</span>
+        <span class="ph-desc">Tree-walking interpreter &middot; return value</span>
+        <span class="ph-chevron">&#9658;</span>
+      </div>
+      <div class="phase-body"><div id="out-6"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<footer>Mini C Compiler &mdash; Educational Project &mdash; Zero dependencies &mdash; Pure HTML + JS</footer>
+
+<script>
+/* ═══════════════════════════
+   SAMPLE PROGRAMS
+═══════════════════════════ */
+const SAMPLES = {
+  basic:  `int main() {\n    int x = 5 + 3;\n    int y = x * 2;\n    return y;\n}`,
+  if:     `int main() {\n    int a = 10;\n    if (a > 5) {\n        a = a - 1;\n    }\n    return a;\n}`,
+  loop:   `int main() {\n    int i = 0;\n    while (i < 3) {\n        i = i + 1;\n    }\n    return i;\n}`,
+  func:   `int add(int a, int b) {\n    return a + b;\n}\nint main() {\n    int r = add(4, 6);\n    return r;\n}`,
+  nested: `int main() {\n    int a = 2;\n    int b = 3;\n    int c = (a + b) * (a - 1);\n    return c;\n}`,
+};
+function loadSample(k) { document.getElementById('src-editor').value = SAMPLES[k]; compile(); }
+
+/* ═══════════════════════════
+   UTILITIES
+═══════════════════════════ */
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toggle(id) { document.getElementById(id).classList.toggle('open'); }
+function resetAll() {
+  for (let i=1;i<=6;i++) {
+    document.getElementById('ph-'+i).classList.remove('active','errored','open');
+    document.getElementById('pip-'+i).classList.remove('lit','err');
+  }
+}
+function activatePhase(n, hasErr) {
+  const el=document.getElementById('ph-'+n), pip=document.getElementById('pip-'+n);
+  el.classList.add('open');
+  if (hasErr) { el.classList.add('errored'); pip.classList.add('err'); }
+  else         { el.classList.add('active');  pip.classList.add('lit'); }
+}
+function clearAll() {
+  document.getElementById('src-editor').value='';
+  for (let i=1;i<=6;i++) {
+    document.getElementById('out-'+i).innerHTML='';
+    document.getElementById('ph-'+i).classList.remove('active','errored','open');
+    document.getElementById('pip-'+i).classList.remove('lit','err');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 1 — LEXER
+   Converts raw source text into a flat array of tokens.
+   Each token: { type, val, pos }
+   Token types: KEYWORD, IDENT, NUMBER, OPERATOR, PUNCT,
+                STRING, UNKNOWN
+═══════════════════════════════════════════════════════ */
+const KEYWORDS = ['int','float','char','void','return','if','else','while','for','break','continue'];
+
+function lex(src) {
+  const tokens = [];
+  let i = 0;
+  while (i < src.length) {
+    if (/\s/.test(src[i])) { i++; continue; }
+    // single-line comment
+    if (src[i]==='/' && src[i+1]==='/') { while(i<src.length && src[i]!=='\n') i++; continue; }
+    // string literal
+    if (src[i]==='"') {
+      let j=i+1; while(j<src.length && src[j]!=='"') j++; j++;
+      tokens.push({type:'STRING', val:src.slice(i,j), pos:i}); i=j; continue;
+    }
+    // number
+    if (/[0-9]/.test(src[i])) {
+      let j=i; while(j<src.length && /[0-9.]/.test(src[j])) j++;
+      tokens.push({type:'NUMBER', val:src.slice(i,j), pos:i}); i=j; continue;
+    }
+    // identifier / keyword
+    if (/[a-zA-Z_]/.test(src[i])) {
+      let j=i; while(j<src.length && /\w/.test(src[j])) j++;
+      const v=src.slice(i,j);
+      tokens.push({type:KEYWORDS.includes(v)?'KEYWORD':'IDENT', val:v, pos:i}); i=j; continue;
+    }
+    // two-char operators
+    const two=src.slice(i,i+2);
+    if (['==','!=','<=','>=','&&','||','++','--','+=','-='].includes(two)) {
+      tokens.push({type:'OPERATOR', val:two, pos:i}); i+=2; continue;
+    }
+    // single-char operators
+    if ('+-*/%<>=!'.includes(src[i])) { tokens.push({type:'OPERATOR', val:src[i], pos:i}); i++; continue; }
+    // punctuation
+    if (';,(){}[]'.includes(src[i])) { tokens.push({type:'PUNCT', val:src[i], pos:i}); i++; continue; }
+    tokens.push({type:'UNKNOWN', val:src[i], pos:i}); i++;
+  }
+  return tokens;
+}
+
+function renderTokens(tokens) {
+  const pills = tokens.map(t =>
+    `<div class="tok tok-${t.type}">
+       <span class="tok-val">${esc(t.val)}</span>
+       <span class="tok-type">${t.type}</span>
+     </div>`
+  ).join('');
+  return `<div class="token-grid">${pills}</div>
+    <p class="hint">${tokens.length} tokens produced</p>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 2 — RECURSIVE-DESCENT PARSER
+   Builds a full AST. Supported constructs:
+     multiple function declarations, typed params,
+     var decl/assign, if/else, while, return,
+     binary expressions (all precedence levels),
+     function calls, number/string literals
+═══════════════════════════════════════════════════════ */
+function parse(tokens) {
+  let pos=0;
+  const cur  = ()=>tokens[pos];
+  const peek = n=>tokens[pos+(n||0)];
+  const eat  = ()=>tokens[pos++];
+  function expect(v) {
+    if (!cur()||cur().val!==v) throw new Error(`Expected '${v}' got '${cur()?cur().val:'EOF'}'`);
+    return eat();
+  }
+  const isType = ()=>cur()&&['int','float','char','void'].includes(cur().val);
+  const parseType = ()=>isType()?eat().val:null;
+
+  // Expression precedence climbing
+  const parseExpr   = ()=>parseOr();
+  const parseOr     = ()=>leftAssoc(parseAnd,   ['||']);
+  const parseAnd    = ()=>leftAssoc(parseCmp,   ['&&']);
+  const parseCmp    = ()=>leftAssoc(parseAddSub,['<','>','<=','>=','==','!=']);
+  const parseAddSub = ()=>leftAssoc(parseMulDiv,['+','-']);
+  const parseMulDiv = ()=>leftAssoc(parseUnary, ['*','/','%']);
+
+  function leftAssoc(sub, ops) {
+    let l=sub();
+    while(cur()&&ops.includes(cur().val)) { const op=eat().val, r=sub(); l={type:'BinaryExpr',op,left:l,right:r}; }
+    return l;
+  }
+
+  function parseUnary() { return parseCall(); }
+
+  function parseCall() {
+    let n=parsePrimary();
+    if(n&&n.type==='Ident'&&cur()&&cur().val==='(') {
+      eat(); // (
+      const args=[];
+      while(cur()&&cur().val!==')') { args.push(parseExpr()); if(cur()&&cur().val===',') eat(); }
+      expect(')');
+      return {type:'CallExpr', name:n.name, args};
+    }
+    return n;
+  }
+
+  function parsePrimary() {
+    if(!cur()) return null;
+    if(cur().type==='NUMBER') return {type:'NumLit', value:parseFloat(eat().val)};
+    if(cur().type==='STRING') return {type:'StrLit', value:eat().val};
+    if(cur().type==='IDENT')  return {type:'Ident',  name:eat().val};
+    if(cur().val==='(') { eat(); const e=parseExpr(); expect(')'); return e; }
+    throw new Error(`Unexpected token '${cur().val}'`);
+  }
+
+  function parseBlock() {
+    expect('{');
+    const stmts=[];
+    while(cur()&&cur().val!=='}') stmts.push(parseStmt());
+    expect('}');
+    return {type:'Block', body:stmts};
+  }
+
+  function parseStmt() {
+    if(!cur()) return null;
+    if(cur().val==='if') {
+      eat(); expect('('); const cond=parseExpr(); expect(')');
+      const body=parseBlock();
+      let elseBody=null;
+      if(cur()&&cur().val==='else') { eat(); elseBody=parseBlock(); }
+      return {type:'IfStmt', cond, body, else:elseBody};
+    }
+    if(cur().val==='while') {
+      eat(); expect('('); const cond=parseExpr(); expect(')');
+      return {type:'WhileStmt', cond, body:parseBlock()};
+    }
+    if(cur().val==='return') {
+      eat();
+      const val=cur()&&cur().val!==';'?parseExpr():null;
+      expect(';'); return {type:'ReturnStmt', value:val};
+    }
+    if(isType()) {
+      const dtype=parseType(), name=eat().val;
+      let init=null;
+      if(cur()&&cur().val==='=') { eat(); init=parseExpr(); }
+      expect(';'); return {type:'VarDecl', dtype, name, init};
+    }
+    if(cur().type==='IDENT'&&peek(1)&&peek(1).val==='=') {
+      const name=eat().val; eat();
+      const value=parseExpr(); expect(';'); return {type:'AssignStmt', name, value};
+    }
+    const expr=parseExpr(); expect(';'); return {type:'ExprStmt', expr};
+  }
+
+  function parseFuncDecl() {
+    const rtype=parseType()||'int', name=eat().val;
+    expect('(');
+    const params=[];
+    while(cur()&&cur().val!==')') {
+      const pt=parseType()||'int', pn=eat().val;
+      params.push({type:pt, name:pn});
+      if(cur()&&cur().val===',') eat();
+    }
+    expect(')');
+    return {type:'FuncDecl', rtype, name, params, body:parseBlock()};
+  }
+
+  const body=[];
+  while(pos<tokens.length) body.push(parseFuncDecl());
+  return {type:'Program', body};
+}
+
+/* AST → SVG tree rendering */
+function astToSvg(ast) {
+  function exprNode(n) {
+    if(!n) return {label:'null',children:[]};
+    if(n.type==='NumLit')     return {label:'Num: '+n.value, children:[]};
+    if(n.type==='StrLit')     return {label:'Str: '+n.value.slice(0,12), children:[]};
+    if(n.type==='Ident')      return {label:'ID: '+n.name, children:[]};
+    if(n.type==='BinaryExpr') return {label:'BinOp "'+n.op+'"', children:[exprNode(n.left),exprNode(n.right)]};
+    if(n.type==='CallExpr')   return {label:'Call: '+n.name, children:n.args.map((a,i)=>({label:'arg'+(i+1),children:[exprNode(a)]}))};
+    return {label:n.type, children:[]};
+  }
+  function stmtNode(s) {
+    if(s.type==='VarDecl')    return {label:'VarDecl '+s.dtype+' '+s.name, children:s.init?[exprNode(s.init)]:[]};
+    if(s.type==='AssignStmt') return {label:'Assign '+s.name, children:[exprNode(s.value)]};
+    if(s.type==='ReturnStmt') return {label:'Return', children:s.value?[exprNode(s.value)]:[]};
+    if(s.type==='ExprStmt')   return {label:'ExprStmt', children:[exprNode(s.expr)]};
+    if(s.type==='IfStmt') {
+      const c=[{label:'Cond',children:[exprNode(s.cond)]},{label:'Then',children:s.body.body.map(stmtNode)}];
+      if(s.else) c.push({label:'Else',children:s.else.body.map(stmtNode)});
+      return {label:'IfStmt',children:c};
+    }
+    if(s.type==='WhileStmt') return {label:'WhileStmt',children:[{label:'Cond',children:[exprNode(s.cond)]},{label:'Body',children:s.body.body.map(stmtNode)}]};
+    return {label:s.type,children:[]};
+  }
+  function fnNode(fn) {
+    const sig=fn.name+'('+fn.params.map(p=>p.type+' '+p.name).join(', ')+'):'+fn.rtype;
+    return {label:'FuncDecl: '+sig, children:[{label:'Body',children:fn.body.body.map(stmtNode)}]};
+  }
+  const root={label:'Program', children:ast.body.map(fnNode)};
+
+  // Layout
+  const NH=22, GX=10, GY=36, PAD=10, CW=6.4;
+  function measureW(n) {
+    n.sw=Math.max(60, n.label.length*CW+PAD*2);
+    if(!n.children.length){n.w=n.sw;return;}
+    n.children.forEach(measureW);
+    const cs=n.children.reduce((s,c)=>s+c.w,0)+(n.children.length-1)*GX;
+    n.w=Math.max(n.sw,cs);
+  }
+  function layout(n,x,y) {
+    n.x=x; n.y=y;
+    if(!n.children.length) return;
+    const total=n.children.reduce((s,c)=>s+c.w,0)+(n.children.length-1)*GX;
+    let cx=x+n.w/2-total/2;
+    n.children.forEach(c=>{layout(c,cx,y+GY);cx+=c.w+GX;});
+  }
+  function maxV(n,fn){return Math.max(fn(n),...n.children.map(c=>maxV(c,fn)));}
+  measureW(root); layout(root,4,8);
+  const svgH=maxV(root,n=>n.y)+NH+20;
+  const svgW=Math.max(600,maxV(root,n=>n.x+n.w)+8);
+
+  const FILLS  =['#EEEDFE','#E1F5EE','#FAEEDA','#FAECE7','#E6F1FB','#F1EFE8'];
+  const STROKES=['#AFA9EC','#5DCAA5','#EF9F27','#F0997B','#85B7EB','#B4B2A9'];
+  const TEXTS  =['#3C3489','#085041','#633806','#4A1B0C','#042C53','#2C2C2A'];
+
+  const rects=[], lines=[];
+  function draw(n,depth,parent) {
+    const ci=depth%FILLS.length;
+    const nx=n.x+(n.w-n.sw)/2, mx=nx+n.sw/2, my=n.y+NH/2;
+    if(parent){
+      const px=parent.x+(parent.w-parent.sw)/2+parent.sw/2;
+      lines.push(`<line x1="${px}" y1="${parent.y+NH}" x2="${mx}" y2="${n.y}" stroke="#b4b2a9" stroke-width="0.8"/>`);
+    }
+    rects.push(`<rect x="${nx}" y="${n.y}" width="${n.sw}" height="${NH}" rx="4" fill="${FILLS[ci]}" stroke="${STROKES[ci]}" stroke-width="0.5"/>
+<text x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="central" fill="${TEXTS[ci]}" font-size="10" font-family="monospace" font-weight="500">${esc(n.label)}</text>`);
+    n.children.forEach(c=>draw(c,depth+1,n));
+  }
+  draw(root,0,null);
+  return `<div class="tree-wrap">
+    <svg class="tree-svg" width="${svgW}" viewBox="0 0 ${svgW} ${svgH}" style="min-width:${svgW}px">
+      ${lines.join('')}${rects.join('')}
+    </svg>
+  </div>
+  <p class="hint">${ast.body.length} function(s) parsed — hover to explore the tree</p>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 3 — SEMANTIC ANALYSIS
+   • Builds a global function symbol table (first pass)
+   • Checks each function body for:
+       - undeclared / redeclared variables
+       - undeclared function calls
+       - argument count mismatches
+       - strings used in arithmetic (warning)
+═══════════════════════════════════════════════════════ */
+function semanticAnalysis(ast) {
+  const funcTable={}, allSymbols={}, errors=[], warnings=[];
+
+  // First pass: register all function signatures
+  ast.body.forEach(fn=>{
+    if(funcTable[fn.name]) errors.push(`Function '${fn.name}' declared more than once`);
+    funcTable[fn.name]={rtype:fn.rtype, params:fn.params};
+    allSymbols[fn.name]={kind:'function', sig:fn.rtype+'('+fn.params.map(p=>p.type+' '+p.name).join(', ')+')'};
+  });
+
+  function checkExpr(e,scope) {
+    if(!e) return 'void';
+    if(e.type==='NumLit')  return Number.isInteger(e.value)?'int':'float';
+    if(e.type==='StrLit')  return 'char*';
+    if(e.type==='Ident') {
+      if(!scope[e.name]) errors.push(`Variable '${e.name}' used before declaration`);
+      return scope[e.name]||'unknown';
+    }
+    if(e.type==='BinaryExpr') {
+      const lt=checkExpr(e.left,scope), rt=checkExpr(e.right,scope);
+      if(lt==='char*'||rt==='char*') warnings.push(`String in arithmetic expression '${e.op}'`);
+      return 'int';
+    }
+    if(e.type==='CallExpr') {
+      if(!funcTable[e.name]) errors.push(`Function '${e.name}' called but not declared`);
+      const fn=funcTable[e.name];
+      if(fn&&fn.params.length!==e.args.length) errors.push(`'${e.name}' expects ${fn.params.length} arg(s), got ${e.args.length}`);
+      e.args.forEach(a=>checkExpr(a,scope));
+      return fn?fn.rtype:'unknown';
+    }
+    return 'int';
+  }
+
+  function checkStmt(s,scope) {
+    if(s.type==='VarDecl') {
+      if(scope.hasOwnProperty(s.name)) errors.push(`Variable '${s.name}' redeclared in same scope`);
+      scope[s.name]=s.dtype;
+      allSymbols[s.name]={kind:'variable',sig:s.dtype};
+      if(s.init) checkExpr(s.init,scope);
+    }
+    if(s.type==='AssignStmt') { if(!scope[s.name]) errors.push(`Variable '${s.name}' assigned but not declared`); checkExpr(s.value,scope); }
+    if(s.type==='ReturnStmt') checkExpr(s.value,scope);
+    if(s.type==='ExprStmt')   checkExpr(s.expr,scope);
+    if(s.type==='IfStmt')     { checkExpr(s.cond,scope); s.body.body.forEach(x=>checkStmt(x,{...scope})); if(s.else) s.else.body.forEach(x=>checkStmt(x,{...scope})); }
+    if(s.type==='WhileStmt')  { checkExpr(s.cond,scope); s.body.body.forEach(x=>checkStmt(x,{...scope})); }
+  }
+
+  ast.body.forEach(fn=>{
+    const scope={};
+    fn.params.forEach(p=>{ scope[p.name]=p.type; allSymbols[p.name]={kind:'param',sig:p.type}; });
+    fn.body.body.forEach(s=>checkStmt(s,scope));
+  });
+
+  return {allSymbols, errors, warnings};
+}
+
+function renderSemantic({allSymbols, errors, warnings}) {
+  const rows=Object.entries(allSymbols).map(([name,info])=>
+    `<tr><td>${esc(name)}</td><td>${info.kind}</td><td>${esc(info.sig)}</td></tr>`
+  ).join('');
+  const symHtml=`<table class="sym-table"><tr><th>Name</th><th>Kind</th><th>Type / Signature</th></tr>${rows}</table>`;
+  const wHtml=warnings.map(w=>`<div class="alert-warn" style="margin-top:6px">&#9888; ${esc(w)}</div>`).join('');
+  const eHtml=errors.length
+    ? errors.map(e=>`<div class="alert-err" style="margin-top:6px">&#10005; ${esc(e)}</div>`).join('')
+    : `<div class="alert-ok" style="margin-top:6px">&#10003; No type errors detected</div>`;
+  return symHtml+wHtml+eHtml;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 4 — INTERMEDIATE REPRESENTATION (THREE-ADDRESS CODE)
+   Each instruction: { op, dest, arg1, arg2, oper, params }
+   Ops: func, label, assign, binop, param, call,
+        return, iffalse, goto
+═══════════════════════════════════════════════════════ */
+function generateIR(ast) {
+  let tmpN=0, lblN=0;
+  const code=[];
+  const newTmp=()=>'t'+(++tmpN);
+  const newLbl=()=>'L'+(++lblN);
+
+  function irExpr(e) {
+    if(!e) return '0';
+    if(e.type==='NumLit') return String(e.value);
+    if(e.type==='StrLit') return e.value;
+    if(e.type==='Ident')  return e.name;
+    if(e.type==='BinaryExpr') {
+      const l=irExpr(e.left), r=irExpr(e.right), t=newTmp();
+      code.push({op:'binop', dest:t, arg1:l, arg2:r, oper:e.op}); return t;
+    }
+    if(e.type==='CallExpr') {
+      const args=e.args.map(irExpr);
+      args.forEach(a=>code.push({op:'param', dest:'', arg1:a}));
+      const t=newTmp();
+      code.push({op:'call', dest:t, arg1:e.name, arg2:String(e.args.length)}); return t;
+    }
+    return '?';
+  }
+
+  function irStmt(s) {
+    if(s.type==='VarDecl'&&s.init)    { const v=irExpr(s.init);  code.push({op:'assign',dest:s.name,arg1:v}); }
+    if(s.type==='AssignStmt')          { const v=irExpr(s.value); code.push({op:'assign',dest:s.name,arg1:v}); }
+    if(s.type==='ReturnStmt')          { code.push({op:'return',dest:'',arg1:s.value?irExpr(s.value):''}); }
+    if(s.type==='ExprStmt')            { irExpr(s.expr); }
+    if(s.type==='IfStmt') {
+      const c=irExpr(s.cond), lF=newLbl(), lE=newLbl();
+      code.push({op:'iffalse',dest:lF,arg1:c});
+      s.body.body.forEach(irStmt);
+      code.push({op:'goto',dest:lE});
+      code.push({op:'label',dest:lF});
+      if(s.else) s.else.body.forEach(irStmt);
+      code.push({op:'label',dest:lE});
+    }
+    if(s.type==='WhileStmt') {
+      const lS=newLbl(), lE=newLbl();
+      code.push({op:'label',dest:lS});
+      const c=irExpr(s.cond);
+      code.push({op:'iffalse',dest:lE,arg1:c});
+      s.body.body.forEach(irStmt);
+      code.push({op:'goto',dest:lS});
+      code.push({op:'label',dest:lE});
+    }
+  }
+
+  ast.body.forEach(fn=>{
+    code.push({op:'func',dest:fn.name,params:fn.params});
+    fn.body.body.forEach(irStmt);
+  });
+  return code;
+}
+
+function renderIR(code) {
+  let n=0;
+  const rows=code.map(c=>{
+    if(c.op==='func') {
+      const sig=c.dest+'('+(c.params||[]).map(p=>p.type+' '+p.name).join(', ')+')';
+      return `<tr><td></td><td colspan="2" style="font-weight:600;padding-top:8px">func ${esc(sig)}:</td></tr>`;
+    }
+    if(c.op==='label') return `<tr><td></td><td colspan="2" style="color:var(--blue);padding-left:4px">${esc(c.dest)}:</td></tr>`;
+    n++;
+    let instr='';
+    if(c.op==='assign')  instr=`${esc(c.dest)} = ${esc(c.arg1)}`;
+    if(c.op==='binop')   instr=`${esc(c.dest)} = ${esc(c.arg1)} ${esc(c.oper)} ${esc(c.arg2)}`;
+    if(c.op==='param')   instr=`param ${esc(c.arg1)}`;
+    if(c.op==='call')    instr=`${esc(c.dest)} = call ${esc(c.arg1)}, ${esc(c.arg2)}`;
+    if(c.op==='return')  instr=`return ${esc(c.arg1)}`;
+    if(c.op==='iffalse') instr=`ifFalse ${esc(c.arg1)} goto ${esc(c.dest)}`;
+    if(c.op==='goto')    instr=`goto ${esc(c.dest)}`;
+    return `<tr><td>${n}</td><td>${esc(c.op)}</td><td style="font-family:var(--font-mono)">${instr}</td></tr>`;
+  }).join('');
+  return `<table class="ir-table">
+    <tr><td></td><td style="color:var(--text3);font-size:10px;text-transform:uppercase">op</td>
+    <td style="color:var(--text3);font-size:10px;text-transform:uppercase">instruction</td></tr>
+    ${rows}</table>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 5 — CODE GENERATION (pseudo x86 assembly)
+   Stack-frame based code gen:
+   • Functions: push ebp / mov ebp,esp
+   • Locals at [ebp - offset], 4 bytes each
+   • Accumulator: eax
+   • Arithmetic: add/sub/imul/idiv/cdq
+   • Comparisons: cmp + conditional set
+   • Control flow: cmp/je/jmp
+   • Calls: push args (right-to-left), call, add esp
+═══════════════════════════════════════════════════════ */
+function generateAsm(ir) {
+  const instr=[];
+  const varOff={};
+  let sp=4;
+
+  function ref(name) {
+    if(/^-?[0-9.]+$/.test(name)) return name;
+    if(varOff[name]) return `[ebp-${varOff[name]}]`;
+    return name;
+  }
+  function alloc(name) { if(!varOff[name]){varOff[name]=sp; sp+=4;} }
+  function emit(t,s,cmt) { instr.push({t,s,comment:cmt||''}); }
+
+  ir.forEach(c=>{
+    if(c.op==='func') {
+      Object.keys(varOff).forEach(k=>delete varOff[k]); sp=4;
+      emit('lbl', c.dest+':');
+      emit('op','push ebp','; save base pointer');
+      emit('op','mov ebp, esp','; set up stack frame');
+      if(c.params) c.params.forEach((p,i)=>{ varOff[p.name]=-(8+i*4); });
+    }
+    if(c.op==='label') emit('lbl', c.dest+':');
+
+    if(c.op==='assign') {
+      alloc(c.dest);
+      emit('op',`mov eax, ${ref(c.arg1)}`,`; load ${c.arg1}`);
+      emit('op',`mov ${ref(c.dest)}, eax`,`; store → ${c.dest}`);
+    }
+
+    if(c.op==='binop') {
+      alloc(c.dest);
+      emit('op',`mov eax, ${ref(c.arg1)}`,'; left operand');
+      const ARITH={'+':'add','-':'sub','*':'imul','/':'idiv','%':'idiv'};
+      const CMP={'<':'jl','>':'jg','<=':'jle','>=':'jge','==':'je','!=':'jne'};
+      if(ARITH[c.oper]) {
+        if(c.oper==='/'||c.oper==='%') {
+          emit('op','cdq','; sign-extend eax → edx:eax');
+          emit('op',`mov ecx, ${ref(c.arg2)}`,'; divisor');
+          emit('op','idiv ecx','; eax=quotient, edx=remainder');
+          if(c.oper==='%') emit('op','mov eax, edx','; keep remainder');
+        } else {
+          emit('op',`${ARITH[c.oper]} eax, ${ref(c.arg2)}`,`; ${c.oper} operation`);
+        }
+      } else if(CMP[c.oper]) {
+        emit('op',`cmp eax, ${ref(c.arg2)}`,'; compare');
+        emit('op',`${CMP[c.oper]} .t_${c.dest}`,'; branch if true');
+        emit('op','mov eax, 0');
+        emit('op',`jmp .d_${c.dest}`);
+        emit('lbl',`.t_${c.dest}:`);
+        emit('op','mov eax, 1');
+        emit('lbl',`.d_${c.dest}:`);
+      }
+      emit('op',`mov ${ref(c.dest)}, eax`,`; store result → ${c.dest}`);
+    }
+
+    if(c.op==='param') emit('op',`push ${ref(c.arg1)}`,`; push arg`);
+    if(c.op==='call') {
+      alloc(c.dest);
+      emit('op',`call ${c.arg1}`,'; function call');
+      if(parseInt(c.arg2)>0) emit('op',`add esp, ${parseInt(c.arg2)*4}`,'; clean up args');
+      emit('op',`mov ${ref(c.dest)}, eax`,`; capture return → ${c.dest}`);
+    }
+    if(c.op==='return') {
+      if(c.arg1) emit('op',`mov eax, ${ref(c.arg1)}`,'; set return value');
+      emit('op','pop ebp','; restore base pointer');
+      emit('op','ret','; return to caller');
+    }
+    if(c.op==='iffalse') { emit('op','cmp eax, 0'); emit('op',`je ${c.dest}`,'; jump if false'); }
+    if(c.op==='goto')    { emit('op',`jmp ${c.dest}`); }
+  });
+  return instr;
+}
+
+function renderAsm(instr) {
+  const html=instr.map(i=>{
+    if(i.t==='lbl') return `<span class="asm-lbl">${esc(i.s)}</span>`;
+    const parts=i.s.split(' '), op=parts[0], rest=parts.slice(1).join(' ');
+    const cmt=i.comment?`  <span class="asm-cmt">${esc(i.comment)}</span>`:'';
+    return `    <span class="asm-op">${esc(op)}</span> ${esc(rest)}${cmt}`;
+  }).join('\n');
+  return `<div class="asm-block">${html}</div>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHASE 6 — EXECUTION (tree-walking interpreter)
+   Walks the AST directly, no bytecode needed.
+   Supports all arithmetic, comparisons, if/while,
+   recursive function calls (with proper scoping),
+   and simulated printf/print/puts to stdout.
+═══════════════════════════════════════════════════════ */
+function execute(ast) {
+  const funcs={}, stdout=[];
+  ast.body.forEach(fn=>funcs[fn.name]=fn);
+
+  function evalExpr(e,env) {
+    if(!e) return 0;
+    if(e.type==='NumLit') return e.value;
+    if(e.type==='StrLit') return e.value;
+    if(e.type==='Ident')  return (e.name in env)?env[e.name]:0;
+    if(e.type==='BinaryExpr') {
+      const l=evalExpr(e.left,env), r=evalExpr(e.right,env);
+      switch(e.op){
+        case '+': return l+r; case '-': return l-r; case '*': return l*r;
+        case '/': return r?Math.trunc(l/r):0; case '%': return r?l%r:0;
+        case '<': return l<r?1:0;  case '>': return l>r?1:0;
+        case '<=':return l<=r?1:0; case '>=':return l>=r?1:0;
+        case '==':return l===r?1:0; case '!=':return l!==r?1:0;
+        case '&&':return (l&&r)?1:0; case '||':return (l||r)?1:0;
+      }
+    }
+    if(e.type==='CallExpr') {
+      if(['printf','print','puts'].includes(e.name)) {
+        stdout.push(e.args.map(a=>evalExpr(a,env)).join(' ')); return 0;
+      }
+      const fn=funcs[e.name]; if(!fn) return 0;
+      const nenv={};
+      fn.params.forEach((p,i)=>nenv[p.name]=evalExpr(e.args[i]||{type:'NumLit',value:0},env));
+      return runBlock(fn.body,nenv);
+    }
+    return 0;
+  }
+
+  function runBlock(block,env) {
+    for(const s of block.body){
+      const r=runStmt(s,env);
+      if(r!==null&&typeof r==='object'&&'__ret__' in r) return r.__ret__;
+    }
+    return 0;
+  }
+
+  function runStmt(s,env) {
+    if(s.type==='VarDecl')    { env[s.name]=s.init?evalExpr(s.init,env):0; return null; }
+    if(s.type==='AssignStmt') { env[s.name]=evalExpr(s.value,env); return null; }
+    if(s.type==='ExprStmt')   { evalExpr(s.expr,env); return null; }
+    if(s.type==='ReturnStmt') { return {__ret__:s.value?evalExpr(s.value,env):0}; }
+    if(s.type==='IfStmt') {
+      const branch=evalExpr(s.cond,env)?s.body:s.else;
+      if(branch) { for(const x of branch.body){ const r=runStmt(x,{...env}); if(r&&'__ret__' in r) return r; } }
+      return null;
+    }
+    if(s.type==='WhileStmt') {
+      let guard=0;
+      while(evalExpr(s.cond,env)&&++guard<100000) {
+        for(const x of s.body.body){ const r=runStmt(x,env); if(r&&'__ret__' in r) return r; }
+      }
+      if(guard>=100000) stdout.push('[Loop limit reached — halted]');
+      return null;
+    }
+    return null;
+  }
+
+  const main=funcs['main'];
+  const ret=main?runBlock(main.body,{}):undefined;
+  return {stdout, ret};
+}
+
+function renderExec({stdout, ret}) {
+  let html='';
+  if(stdout.length) {
+    html+=`<div class="exec-lbl">stdout</div>`;
+    html+=stdout.map(l=>`<div class="exec-out">${esc(l)}</div>`).join('');
+  }
+  const rv=ret===undefined?'undefined':ret;
+  return html+`<div class="alert-ok">&#10003; Process exited &mdash; return value: <strong>${esc(String(rv))}</strong></div>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MAIN COMPILE DRIVER — runs all 6 phases in sequence,
+   stops and marks phase red on first hard error.
+═══════════════════════════════════════════════════════ */
+function compile() {
+  resetAll();
+  const src=document.getElementById('src-editor').value.trim();
+  if(!src) return;
+
+  // Phase 1 — Lex
+  let tokens;
+  try {
+    tokens=lex(src);
+    document.getElementById('out-1').innerHTML=renderTokens(tokens);
+    activatePhase(1,false);
+  } catch(e) {
+    document.getElementById('out-1').innerHTML=`<div class="alert-err">Lexer error: ${esc(e.message)}</div>`;
+    activatePhase(1,true); return;
+  }
+
+  // Phase 2 — Parse
+  let ast;
+  try {
+    ast=parse(tokens);
+    document.getElementById('out-2').innerHTML=astToSvg(ast);
+    activatePhase(2,false);
+  } catch(e) {
+    document.getElementById('out-2').innerHTML=`<div class="alert-err">Parse error: ${esc(e.message)}</div>`;
+    activatePhase(2,true); return;
+  }
+
+  // Phase 3 — Semantic
+  try {
+    const sem=semanticAnalysis(ast);
+    document.getElementById('out-3').innerHTML=renderSemantic(sem);
+    activatePhase(3, sem.errors.length>0);
+  } catch(e) {
+    document.getElementById('out-3').innerHTML=`<div class="alert-err">Semantic error: ${esc(e.message)}</div>`;
+    activatePhase(3,true);
+  }
+
+  // Phase 4 — IR
+  let ir;
+  try {
+    ir=generateIR(ast);
+    document.getElementById('out-4').innerHTML=renderIR(ir);
+    activatePhase(4,false);
+  } catch(e) {
+    document.getElementById('out-4').innerHTML=`<div class="alert-err">IR error: ${esc(e.message)}</div>`;
+    activatePhase(4,true); return;
+  }
+
+  // Phase 5 — Code gen
+  try {
+    const asm=generateAsm(ir);
+    document.getElementById('out-5').innerHTML=renderAsm(asm);
+    activatePhase(5,false);
+  } catch(e) {
+    document.getElementById('out-5').innerHTML=`<div class="alert-err">Codegen error: ${esc(e.message)}</div>`;
+    activatePhase(5,true);
+  }
+
+  // Phase 6 — Execute
+  try {
+    const result=execute(ast);
+    document.getElementById('out-6').innerHTML=renderExec(result);
+    activatePhase(6,false);
+  } catch(e) {
+    document.getElementById('out-6').innerHTML=`<div class="alert-err">Runtime error: ${esc(e.message)}</div>`;
+    activatePhase(6,true);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', compile);
+</script>
+</body>
+</html>
